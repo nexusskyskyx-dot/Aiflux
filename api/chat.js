@@ -26,7 +26,7 @@ export default async function handler(req, res) {
                 'X-Title': 'AIFlux'
             },
             body: JSON.stringify({
-                model: 'meta-llama/llama-3.3-70b-instruct:free',
+                model: 'deepseek/deepseek-chat-v3.1:free',
                 messages: messages,
                 max_tokens: 500
             })
