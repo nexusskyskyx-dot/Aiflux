@@ -1,4 +1,4 @@
-// ===== AIFlux - App Principal con Sistema Multiagente =====
+// ===== AIFlux - App Principal con Sistema Multiagente y Markdown =====
 
 const BACKEND_URL = "https://aiflux-rho.vercel.app/api/chat";
 
@@ -38,19 +38,46 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// ===== RENDERIZADO DE MARKDOWN =====
+function renderMarkdown(text) {
+    if (!text) return '';
+    try {
+        if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+            marked.setOptions({
+                breaks: true,
+                gfm: true,
+                headerIds: false,
+                mangle: false
+            });
+            const rawHtml = marked.parse(text);
+            return DOMPurify.sanitize(rawHtml, {
+                ADD_ATTR: ['target'],
+                FORBID_TAGS: ['script', 'iframe', 'style'],
+                FORBID_ATTR: ['onerror', 'onload', 'onclick']
+            });
+        }
+        return escapeHtml(text);
+    } catch (e) {
+        console.error('Error renderizando markdown:', e);
+        return escapeHtml(text);
+    }
+}
+
 // ===== RENDERIZADO DE MENSAJES =====
 function renderMessage(role, content, options = {}) {
     const msgDiv = document.createElement('div');
     msgDiv.classList.add('message', role);
     
     if (options.type === 'image') {
-        msgDiv.innerHTML = `${escapeHtml(content)}<img src="${options.url}" alt="Imagen">`;
+        msgDiv.innerHTML = `${renderMarkdown(content)}<img src="${options.url}" alt="Imagen">`;
     } else if (options.type === 'chart') {
-        msgDiv.innerHTML = escapeHtml(content);
+        msgDiv.innerHTML = renderMarkdown(content);
         const canvas = document.createElement('canvas');
         canvas.id = 'chart-' + generateId();
         msgDiv.appendChild(canvas);
         setTimeout(() => renderChart(canvas, options.chartData), 100);
+    } else if (role === 'ai') {
+        msgDiv.innerHTML = renderMarkdown(content);
     } else {
         msgDiv.textContent = content;
     }
@@ -206,7 +233,6 @@ async function sendMessage(textOverride = null) {
     const welcome = chatBox.querySelector('.welcome');
     if (welcome) welcome.remove();
     
-    // Mensaje del usuario
     chat.messages.push({ role: 'user', content: text });
     renderMessage('user', text);
     
@@ -214,7 +240,6 @@ async function sendMessage(textOverride = null) {
     userInput.style.height = 'auto';
     sendBtn.disabled = true;
     
-    // Título del chat
     if (chat.messages.length === 1) {
         chat.title = text.slice(0, 30) + (text.length > 30 ? '...' : '');
         saveChats();
@@ -222,7 +247,7 @@ async function sendMessage(textOverride = null) {
         currentChatTitle.textContent = chat.title;
     }
     
-    // Detectar gráfico localmente
+    // Gráfico local
     const chartData = detectChartRequest(text);
     if (chartData) {
         const reply = `Aquí tienes tu gráfico ${chartData.type === 'pie' ? 'circular' : chartData.type === 'line' ? 'de líneas' : 'de barras'}:`;
@@ -233,13 +258,12 @@ async function sendMessage(textOverride = null) {
         return;
     }
     
-    // ===== MOSTRAR INDICADOR DE AGENTES =====
+    // Indicador de agentes
     let agentStepsContainer = renderAgentSteps([
         { agent: 'router', status: 'running', label: '🧠 Analizando tu pregunta...' }
     ]);
     
     try {
-        // Llamar al backend (que ejecuta el sistema multiagente)
         const response = await fetch(BACKEND_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -248,14 +272,12 @@ async function sendMessage(textOverride = null) {
         
         const data = await response.json();
         
-        // Si el backend devuelve pasos (para animar), los reproducimos
+        // Reproducir pasos
         if (data.steps && data.steps.length > 0) {
-            // Simular progreso paso a paso para UX
             for (let i = 0; i < data.steps.length; i++) {
                 const step = data.steps[i];
                 await new Promise(r => setTimeout(r, 300));
                 
-                // Si es un agente nuevo, añadirlo al contenedor
                 if (!agentStepsContainer.querySelector(`[data-agent="${step.agent}"]`)) {
                     const el = document.createElement('div');
                     el.classList.add('agent-step', 'running');
@@ -273,13 +295,9 @@ async function sendMessage(textOverride = null) {
             }
         }
         
-        // Esperar un momento antes de mostrar la respuesta
         await new Promise(r => setTimeout(r, 400));
-        
-        // Remover indicador
         agentStepsContainer.remove();
         
-        // ===== MOSTRAR RESPUESTA =====
         const aiText = data.text || "No pude responder.";
         
         if (data.imageUrl) {
