@@ -1,5 +1,12 @@
-// api/chat.js - Backend de AIFlux con debug
+// api/chat.js - Orquestador del sistema multiagente de AIFlux
+// Coordina: Router → Researcher → Responder
+
+import { routerAgent } from './agents/router.js';
+import { researcherAgent } from './agents/researcher.js';
+import { responderAgent } from './agents/responder.js';
+
 export default async function handler(req, res) {
+    // CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -12,41 +19,110 @@ export default async function handler(req, res) {
 
     if (!apiKey) {
         return res.status(200).json({ 
-            text: "DEBUG: No hay API Key configurada en Vercel" 
+            text: "⚠️ Falta configurar la API Key en Vercel.",
+            steps: []
         });
     }
 
+    if (!messages || messages.length === 0) {
+        return res.status(200).json({ 
+            text: "No recibí ningún mensaje.",
+            steps: []
+        });
+    }
+
+    // Último mensaje del usuario
+    const userMessage = messages[messages.length - 1].content;
+    const steps = []; // Para mostrar el progreso al frontend
+
     try {
-        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json',
-                'HTTP-Referer': 'https://aiflux-rho.vercel.app',
-                'X-Title': 'AIFlux'
-            },
-            body: JSON.stringify({
-                model: 'openrouter/free',
-                messages: messages,
-                max_tokens: 500
-            })
+        // ========== PASO 1: ROUTER ==========
+        steps.push({ agent: 'router', status: 'running', label: '🧠 Analizando tu pregunta...' });
+        
+        const routing = await routerAgent(userMessage, apiKey);
+        
+        steps.push({ 
+            agent: 'router', 
+            status: 'done', 
+            label: '🧠 Pregunta analizada',
+            result: routing
         });
 
-        const data = await response.json();
-        
-        // Si OpenRouter devuelve error, mostrarlo
-        if (data.error) {
-            return res.status(200).json({ 
-                text: `DEBUG OpenRouter: ${JSON.stringify(data.error)}` 
+        console.log('Router decidió:', routing);
+
+        // ========== CASO: IMAGEN ==========
+        if (routing.accion === 'imagen') {
+            const prompt = routing.tema || userMessage;
+            const imageUrl = `https://gen.pollinations.ai/image/${encodeURIComponent(prompt)}?width=768&height=768&seed=${Date.now()}`;
+            
+            return res.status(200).json({
+                text: `Aquí tienes tu imagen de **${prompt}** 🎨`,
+                imageUrl: imageUrl,
+                steps: steps,
+                action: 'imagen'
             });
         }
+
+        // ========== CASO: GRÁFICO ==========
+        if (routing.accion === 'grafico') {
+            // Devolvemos la petición para que el frontend procese el gráfico
+            return res.status(200).json({
+                text: "Aquí tienes tu gráfico:",
+                action: 'grafico',
+                steps: steps
+            });
+        }
+
+        // ========== CASO: INVESTIGAR ==========
+        let researchData = null;
         
-        const aiText = data.choices?.[0]?.message?.content || "Sin respuesta de la IA.";
-        res.status(200).json({ text: aiText });
+        if (routing.accion === 'investigar') {
+            steps.push({ 
+                agent: 'researcher', 
+                status: 'running', 
+                label: `🔍 Investigando sobre "${routing.tema || 'el tema'}..."` 
+            });
+            
+            researchData = await researcherAgent(userMessage, routing.tema, apiKey);
+            
+            steps.push({ 
+                agent: 'researcher', 
+                status: 'done', 
+                label: '🔍 Investigación completada'
+            });
+        }
+
+        // ========== PASO FINAL: RESPONDER ==========
+        steps.push({ 
+            agent: 'responder', 
+            status: 'running', 
+            label: '💬 Preparando la respuesta...' 
+        });
+
+        const finalAnswer = await responderAgent(userMessage, researchData, apiKey);
         
+        steps.push({ 
+            agent: 'responder', 
+            status: 'done', 
+            label: '💬 Respuesta lista'
+        });
+
+        // ========== RESPUESTA FINAL ==========
+        return res.status(200).json({
+            text: finalAnswer,
+            steps: steps,
+            action: routing.accion,
+            meta: {
+                agentsUsed: routing.accion === 'investigar' ? 3 : 2,
+                topic: routing.tema
+            }
+        });
+
     } catch (error) {
-        res.status(200).json({ 
-            text: `DEBUG Catch: ${error.message}` 
+        console.error('Orquestador error:', error);
+        return res.status(200).json({
+            text: `❌ Error en el sistema de agentes: ${error.message}`,
+            steps: steps
         });
     }
 }

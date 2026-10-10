@@ -1,4 +1,4 @@
-// ===== AIFlux - App Principal =====
+// ===== AIFlux - App Principal con Sistema Multiagente =====
 
 const BACKEND_URL = "https://aiflux-rho.vercel.app/api/chat";
 
@@ -32,17 +32,18 @@ function getCurrentChat() {
     return chats.find(c => c.id === currentChatId);
 }
 
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // ===== RENDERIZADO DE MENSAJES =====
 function renderMessage(role, content, options = {}) {
     const msgDiv = document.createElement('div');
     msgDiv.classList.add('message', role);
     
-    if (options.isTyping) {
-        msgDiv.classList.remove('message');
-        msgDiv.classList.add('typing');
-        msgDiv.innerHTML = '<span></span><span></span><span></span>';
-        msgDiv.dataset.typing = 'true';
-    } else if (options.type === 'image') {
+    if (options.type === 'image') {
         msgDiv.innerHTML = `${escapeHtml(content)}<img src="${options.url}" alt="Imagen">`;
     } else if (options.type === 'chart') {
         msgDiv.innerHTML = escapeHtml(content);
@@ -59,13 +60,65 @@ function renderMessage(role, content, options = {}) {
     return msgDiv;
 }
 
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+// ===== INDICADOR DE AGENTES =====
+function renderAgentSteps(steps) {
+    const container = document.createElement('div');
+    container.classList.add('agent-steps');
+    container.id = 'active-agent-steps';
+    
+    steps.forEach(step => {
+        const el = document.createElement('div');
+        el.classList.add('agent-step');
+        el.dataset.agent = step.agent;
+        el.innerHTML = `
+            <span class="step-icon">${getStepIcon(step.agent)}</span>
+            <span class="step-label">${step.label}</span>
+            ${step.status === 'running' ? '<span class="spinner"></span>' : ''}
+            ${step.status === 'done' ? '<span class="check">✓</span>' : ''}
+        `;
+        if (step.status === 'done') el.classList.add('done');
+        if (step.status === 'running') el.classList.add('running');
+        container.appendChild(el);
+    });
+    
+    chatBox.appendChild(container);
+    chatBox.scrollTop = chatBox.scrollHeight;
+    return container;
 }
 
-// ===== RENDERIZADO DE GRÁFICOS =====
+function updateAgentStep(container, agentName, status, label) {
+    const stepEl = container.querySelector(`[data-agent="${agentName}"]`);
+    if (!stepEl) return;
+    
+    const spinner = stepEl.querySelector('.spinner');
+    const check = stepEl.querySelector('.check');
+    const labelEl = stepEl.querySelector('.step-label');
+    
+    if (label && labelEl) labelEl.textContent = label;
+    
+    if (status === 'done') {
+        stepEl.classList.remove('running');
+        stepEl.classList.add('done');
+        if (spinner) spinner.remove();
+        if (!check) {
+            const newCheck = document.createElement('span');
+            newCheck.classList.add('check');
+            newCheck.textContent = '✓';
+            stepEl.appendChild(newCheck);
+        }
+    }
+}
+
+function getStepIcon(agent) {
+    const icons = {
+        'router': '🧠',
+        'researcher': '🔍',
+        'responder': '💬'
+    };
+    return icons[agent] || '⚙️';
+}
+
+// ===== GRÁFICOS =====
 function renderChart(canvas, chartData) {
     new Chart(canvas, {
         type: chartData.type || 'bar',
@@ -106,18 +159,7 @@ function renderChart(canvas, chartData) {
     });
 }
 
-// ===== DETECCIÓN DE INTENCIONES =====
-function detectImageRequest(text) {
-    const lower = text.toLowerCase();
-    const keywords = ['dibuja', 'imagen', 'foto', 'muéstrame', 'muestrame', 'ilustra', 'pinta', 'genera una imagen'];
-    if (!keywords.some(k => lower.includes(k))) return null;
-    
-    let prompt = lower;
-    keywords.forEach(k => prompt = prompt.replace(k, ''));
-    prompt = prompt.trim();
-    return prompt || null;
-}
-
+// ===== DETECCIÓN DE GRÁFICOS (local) =====
 function detectChartRequest(text) {
     const lower = text.toLowerCase();
     const isChart = lower.includes('gráfico') || lower.includes('grafico') || lower.includes('chart');
@@ -128,7 +170,6 @@ function detectChartRequest(text) {
     if (lower.includes('línea') || lower.includes('linea') || lower.includes('line')) type = 'line';
     if (lower.includes('dona') || lower.includes('doughnut') || lower.includes('anillo')) type = 'doughnut';
     
-    // Formato: "nombre: valor, nombre2: valor2"
     const matches = text.match(/([a-záéíóúñ]+)\s*:?\s*(\d+(?:\.\d+)?)/gi) || 
                     text.match(/([a-záéíóúñ]+)\s+(\d+(?:\.\d+)?)/gi);
     
@@ -162,11 +203,10 @@ async function sendMessage(textOverride = null) {
     const chat = getCurrentChat();
     if (!chat) return;
     
-    // Quitar bienvenida
     const welcome = chatBox.querySelector('.welcome');
     if (welcome) welcome.remove();
     
-    // Mostrar mensaje del usuario
+    // Mensaje del usuario
     chat.messages.push({ role: 'user', content: text });
     renderMessage('user', text);
     
@@ -174,7 +214,7 @@ async function sendMessage(textOverride = null) {
     userInput.style.height = 'auto';
     sendBtn.disabled = true;
     
-    // Título del chat (primer mensaje)
+    // Título del chat
     if (chat.messages.length === 1) {
         chat.title = text.slice(0, 30) + (text.length > 30 ? '...' : '');
         saveChats();
@@ -182,7 +222,7 @@ async function sendMessage(textOverride = null) {
         currentChatTitle.textContent = chat.title;
     }
     
-    // Verificar si es gráfico
+    // Detectar gráfico localmente
     const chartData = detectChartRequest(text);
     if (chartData) {
         const reply = `Aquí tienes tu gráfico ${chartData.type === 'pie' ? 'circular' : chartData.type === 'line' ? 'de líneas' : 'de barras'}:`;
@@ -193,11 +233,13 @@ async function sendMessage(textOverride = null) {
         return;
     }
     
-    // Typing indicator
-    const typingEl = renderMessage('ai', '', { isTyping: true });
+    // ===== MOSTRAR INDICADOR DE AGENTES =====
+    let agentStepsContainer = renderAgentSteps([
+        { agent: 'router', status: 'running', label: '🧠 Analizando tu pregunta...' }
+    ]);
     
     try {
-        // Llamar al backend
+        // Llamar al backend (que ejecuta el sistema multiagente)
         const response = await fetch(BACKEND_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -205,16 +247,44 @@ async function sendMessage(textOverride = null) {
         });
         
         const data = await response.json();
+        
+        // Si el backend devuelve pasos (para animar), los reproducimos
+        if (data.steps && data.steps.length > 0) {
+            // Simular progreso paso a paso para UX
+            for (let i = 0; i < data.steps.length; i++) {
+                const step = data.steps[i];
+                await new Promise(r => setTimeout(r, 300));
+                
+                // Si es un agente nuevo, añadirlo al contenedor
+                if (!agentStepsContainer.querySelector(`[data-agent="${step.agent}"]`)) {
+                    const el = document.createElement('div');
+                    el.classList.add('agent-step', 'running');
+                    el.dataset.agent = step.agent;
+                    el.innerHTML = `
+                        <span class="step-icon">${getStepIcon(step.agent)}</span>
+                        <span class="step-label">${step.label}</span>
+                        <span class="spinner"></span>
+                    `;
+                    agentStepsContainer.appendChild(el);
+                }
+                
+                updateAgentStep(agentStepsContainer, step.agent, 'done', step.label);
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }
+        }
+        
+        // Esperar un momento antes de mostrar la respuesta
+        await new Promise(r => setTimeout(r, 400));
+        
+        // Remover indicador
+        agentStepsContainer.remove();
+        
+        // ===== MOSTRAR RESPUESTA =====
         const aiText = data.text || "No pude responder.";
         
-        typingEl.remove();
-        
-        // Verificar imagen
-        const imagePrompt = detectImageRequest(text);
-        if (imagePrompt) {
-            const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(imagePrompt)}?width=768&height=768&seed=${Date.now()}&nologo=true`;
-            chat.messages.push({ role: 'assistant', content: aiText, imageUrl });
-            renderMessage('ai', aiText, { type: 'image', url: imageUrl });
+        if (data.imageUrl) {
+            chat.messages.push({ role: 'assistant', content: aiText, imageUrl: data.imageUrl });
+            renderMessage('ai', aiText, { type: 'image', url: data.imageUrl });
         } else {
             chat.messages.push({ role: 'assistant', content: aiText });
             renderMessage('ai', aiText);
@@ -223,8 +293,8 @@ async function sendMessage(textOverride = null) {
         saveChats();
         
     } catch (error) {
-        typingEl.remove();
-        renderMessage('ai', 'Error de conexión. Intenta de nuevo.');
+        if (agentStepsContainer) agentStepsContainer.remove();
+        renderMessage('ai', '❌ Error de conexión con el sistema de agentes. Intenta de nuevo.');
         console.error(error);
     } finally {
         sendBtn.disabled = false;
@@ -262,11 +332,7 @@ function deleteChat(id, event) {
     event.stopPropagation();
     chats = chats.filter(c => c.id !== id);
     if (currentChatId === id) {
-        if (chats.length > 0) {
-            currentChatId = chats[0].id;
-        } else {
-            currentChatId = null;
-        }
+        currentChatId = chats.length > 0 ? chats[0].id : null;
     }
     saveChats();
     renderChatList();
@@ -314,12 +380,12 @@ function renderWelcome() {
         <div class="welcome">
             <div class="welcome-icon">🤖</div>
             <h1>¿En qué puedo ayudarte?</h1>
-            <p class="welcome-sub">Pregúntame lo que quieras, o pídeme un gráfico:</p>
+            <p class="welcome-sub">Sistema multiagente: Router → Investigador → Respondedor</p>
             <div class="suggestions">
+                <button class="suggestion" data-text="Busca sobre Call of Duty">🔍 Busca sobre Call of Duty</button>
+                <button class="suggestion" data-text="Explícame qué es la computación cuántica">🧠 Computación cuántica</button>
                 <button class="suggestion" data-text="Dibuja un gato astronauta">🎨 Dibuja un gato astronauta</button>
                 <button class="suggestion" data-text="Hazme un gráfico de barras con ventas: enero 100, febrero 200, marzo 150">📊 Gráfico de ventas</button>
-                <button class="suggestion" data-text="Cuéntame un chiste corto">😂 Cuéntame un chiste</button>
-                <button class="suggestion" data-text="Hazme un gráfico circular: manzanas 30, peras 50, uvas 20">🥧 Gráfico circular</button>
             </div>
         </div>
     `;
@@ -363,7 +429,6 @@ userInput.addEventListener('input', () => {
 });
 
 newChatBtn.onclick = createNewChat;
-
 openSidebarBtn.onclick = openSidebar;
 toggleSidebarBtn.onclick = closeSidebar;
 overlay.onclick = closeSidebar;
