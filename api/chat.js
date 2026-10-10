@@ -1,4 +1,4 @@
-// api/chat.js - Backend de AIFlux
+// api/chat.js - Backend de AIFlux con debug
 export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -10,7 +10,11 @@ export default async function handler(req, res) {
     const { messages } = req.body;
     const apiKey = process.env.OPENROUTER_API_KEY;
 
-    if (!apiKey) return res.status(500).json({ error: 'Falta API Key' });
+    if (!apiKey) {
+        return res.status(200).json({ 
+            text: "DEBUG: No hay API Key configurada en Vercel" 
+        });
+    }
 
     try {
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -18,7 +22,7 @@ export default async function handler(req, res) {
             headers: {
                 'Authorization': `Bearer ${apiKey}`,
                 'Content-Type': 'application/json',
-                'HTTP-Referer': 'https://aiflux.app',
+                'HTTP-Referer': 'https://aiflux-rho.vercel.app',
                 'X-Title': 'AIFlux'
             },
             body: JSON.stringify({
@@ -29,9 +33,20 @@ export default async function handler(req, res) {
         });
 
         const data = await response.json();
-        const aiText = data.choices?.[0]?.message?.content || "No pude responder.";
+        
+        // Si OpenRouter devuelve error, mostrarlo
+        if (data.error) {
+            return res.status(200).json({ 
+                text: `DEBUG OpenRouter: ${JSON.stringify(data.error)}` 
+            });
+        }
+        
+        const aiText = data.choices?.[0]?.message?.content || "Sin respuesta de la IA.";
         res.status(200).json({ text: aiText });
+        
     } catch (error) {
-        res.status(500).json({ error: "Error en AIFlux" });
+        res.status(200).json({ 
+            text: `DEBUG Catch: ${error.message}` 
+        });
     }
 }
