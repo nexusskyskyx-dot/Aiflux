@@ -2,20 +2,73 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
     <title>AIFlux</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div id="app">
-        <h1>🤖 AIFlux</h1>
-        <div id="chat-box">
-            <!-- Los mensajes aparecerán aquí -->
-        </div>
-        <div class="input-area">
-            <input type="text" id="user-input" placeholder="Escribe tu pregunta o pide una imagen...">
-            <button id="send-btn">Enviar</button>
-        </div>
+        <!-- SIDEBAR -->
+        <aside id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <span class="logo-icon">🤖</span>
+                    <span class="logo-text">AIFlux</span>
+                </div>
+                <button id="toggle-sidebar" title="Cerrar menú">✕</button>
+            </div>
+            
+            <button id="new-chat-btn">
+                <span>＋</span> Nuevo chat
+            </button>
+            
+            <div class="sidebar-section-title">Chats recientes</div>
+            <div id="chat-list"></div>
+            
+            <div class="sidebar-footer">
+                <div class="user-badge">
+                    <span>👤</span>
+                    <span>nexusskyskyx</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- OVERLAY para móvil -->
+        <div id="overlay"></div>
+
+        <!-- ÁREA PRINCIPAL -->
+        <main id="main">
+            <header id="topbar">
+                <button id="open-sidebar" title="Abrir menú">☰</button>
+                <div class="chat-title" id="current-chat-title">Nuevo chat</div>
+                <div class="topbar-actions">
+                    <button id="clear-btn" title="Limpiar chat">🗑️</button>
+                </div>
+            </header>
+
+            <div id="chat-box">
+                <div class="welcome">
+                    <div class="welcome-icon">🤖</div>
+                    <h1>¿En qué puedo ayudarte?</h1>
+                    <p class="welcome-sub">Pregúntame lo que quieras, o pídeme un gráfico:</p>
+                    <div class="suggestions">
+                        <button class="suggestion" data-text="Dibuja un gato astronauta">🎨 Dibuja un gato astronauta</button>
+                        <button class="suggestion" data-text="Hazme un gráfico de barras con ventas: enero 100, febrero 200, marzo 150">📊 Gráfico de ventas</button>
+                        <button class="suggestion" data-text="Cuéntame un chiste corto">😂 Cuéntame un chiste</button>
+                        <button class="suggestion" data-text="Hazme un gráfico circular: manzanas 30, peras 50, uvas 20">🥧 Gráfico circular</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="input-area">
+                <div class="input-wrapper">
+                    <textarea id="user-input" placeholder="Escribe tu mensaje..." rows="1"></textarea>
+                    <button id="send-btn" title="Enviar">➤</button>
+                </div>
+                <div class="input-hint">AIFlux puede cometer errores. Verifica la información importante.</div>
+            </div>
+        </main>
     </div>
     <script src="app.js"></script>
 </body>
