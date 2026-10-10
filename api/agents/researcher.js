@@ -1,7 +1,7 @@
 // api/agents/researcher.js - Agente investigador
 // Modelo: google/gemma-4-31b-it:free (buen razonamiento y contexto)
 
-const RESEARCHER_MODEL = 'google/gemma-4-31b-it:free';
+const RESEARCHER_MODEL = 'nvidia/nemotron-3-ultra-550b-a55b:free';
 
 export async function researcherAgent(userMessage, tema, apiKey) {
     const systemPrompt = `Eres un investigador experto. Tu tarea es recopilar información precisa, completa y bien estructurada sobre el tema solicitado.

@@ -1,7 +1,7 @@
 // api/agents/responder.js - Agente que genera la respuesta final al usuario
 // Modelo: google/gemma-4-31b-it:free (excelente para lenguaje natural)
 
-const RESPONDER_MODEL = 'google/gemma-4-31b-it:free';
+const RESPONDER_MODEL = 'dots-studio/dots-3-note-preview:free';
 
 export async function responderAgent(userMessage, researchData, apiKey) {
     const systemPrompt = `Eres AIFlux, un asistente de IA amigable, claro y útil. Tu tarea es dar la respuesta FINAL al usuario.
