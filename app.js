@@ -391,4 +391,11 @@ function init() {
     } else {
         currentChatId = chats[0].id;
         renderCurrentChat();
-        const chat = get
+        const chat = getCurrentChat();
+        currentChatTitle.textContent = chat ? chat.title : 'Chat';
+    }
+    
+    attachSuggestionEvents();
+}
+
+init();
