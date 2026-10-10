@@ -26,7 +26,7 @@ export default async function handler(req, res) {
                 'X-Title': 'AIFlux'
             },
             body: JSON.stringify({
-                model: 'deepseek/deepseek-chat-v3.1:free',
+                model: 'openrouter/free',
                 messages: messages,
                 max_tokens: 500
             })
