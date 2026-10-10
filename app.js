@@ -1,6 +1,6 @@
 // Esta URL la obtendrás cuando despliegues tu backend en Vercel.
 // Por ahora, pon un placeholder o usa localhost si pruebas con vercel dev.
-const BACKEND_URL = "TU_URL_DE_VERCEL/api/chat"; 
+const BACKEND_URL = "https://aiflux-rho.vercel.app/api/chat"; 
 
 const chatBox = document.getElementById('chat-box');
 const userInput = document.getElementById('user-input');
